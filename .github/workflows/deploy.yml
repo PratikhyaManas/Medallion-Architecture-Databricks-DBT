@@ -1,0 +1,279 @@
+name: Deploy dbt to Databricks
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'models/**'
+      - 'tests/**'
+      - 'seeds/**'
+      - 'snapshots/**'
+      - 'macros/**'
+      - 'dbt_project.yml'
+      - 'packages.yml'
+      - 'databricks.yml'
+      - 'profiles.yml'
+      - '.github/workflows/deploy.yml'
+  pull_request:
+    branches:
+      - main
+      - develop
+
+env:
+  DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+  DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+  DBT_CLUSTER_ID: ${{ secrets.DBT_CLUSTER_ID }}
+  ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
+
+jobs:
+  dbt-lint:
+    name: Lint dbt Code
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dbt and dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run dbt parse
+        run: dbt parse
+
+      - name: Run dbt debug
+        run: dbt debug
+
+  dbt-test-dev:
+    name: Test dbt Models (Dev)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies from requirements
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Setup dbt profiles
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+          DATABRICKS_HTTP_PATH: ${{ secrets.DATABRICKS_HTTP_PATH }}
+        run: |
+          mkdir -p ~/.dbt
+          cat > ~/.dbt/profiles.yml << 'EOF'
+          databricks_medallion:
+            target: dev
+            outputs:
+              dev:
+                type: databricks
+                method: http
+                catalog: streaming_dev
+                schema: default
+                host: ${{ secrets.DATABRICKS_HOST }}
+                http_path: ${{ secrets.DATABRICKS_HTTP_PATH }}
+                token: ${{ secrets.DATABRICKS_TOKEN }}
+                threads: 4
+          EOF
+
+      - name: Install packages
+        run: dbt deps
+
+      - name: Load seed data
+        run: dbt seed
+
+      - name: Run dbt models
+        run: dbt run
+
+      - name: Run dbt tests
+        run: dbt test
+
+      - name: Generate docs
+        run: dbt docs generate
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dbt-pr-artifacts
+          path: |
+            target/
+            dbt_packages/
+          retention-days: 5
+
+  deploy-dev:
+    name: Deploy to Dev Environment
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    needs: dbt-lint
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Setup dbt profiles
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+          DATABRICKS_HTTP_PATH: ${{ secrets.DATABRICKS_HTTP_PATH }}
+        run: |
+          mkdir -p ~/.dbt
+          cat > ~/.dbt/profiles.yml << 'EOF'
+          databricks_medallion:
+            target: dev
+            outputs:
+              dev:
+                type: databricks
+                method: http
+                catalog: streaming_dev
+                schema: default
+                host: ${{ secrets.DATABRICKS_HOST }}
+                http_path: ${{ secrets.DATABRICKS_HTTP_PATH }}
+                token: ${{ secrets.DATABRICKS_TOKEN }}
+                threads: 4
+          EOF
+
+      - name: Install dbt packages
+        run: dbt deps
+
+      - name: Load seed data
+        run: dbt seed --select "raw_*"
+
+      - name: Run full dbt pipeline
+        run: dbt build --fail-fast
+
+      - name: Generate documentation
+        run: dbt docs generate
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dbt-dev-artifacts
+          path: target/
+          retention-days: 7
+
+  deploy-prod:
+    name: Deploy to Production Environment
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: [dbt-lint, deploy-dev]
+    environment:
+      name: production
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Setup dbt profiles
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+          DATABRICKS_HTTP_PATH: ${{ secrets.DATABRICKS_HTTP_PATH }}
+        run: |
+          mkdir -p ~/.dbt
+          cat > ~/.dbt/profiles.yml << 'EOF'
+          databricks_medallion:
+            target: prod
+            outputs:
+              prod:
+                type: databricks
+                method: http
+                catalog: streaming_prod
+                schema: default
+                host: ${{ secrets.DATABRICKS_HOST }}
+                http_path: ${{ secrets.DATABRICKS_HTTP_PATH }}
+                token: ${{ secrets.DATABRICKS_TOKEN }}
+                threads: 8
+          EOF
+
+      - name: Install dbt packages
+        run: dbt deps
+
+      - name: Load seed data
+        run: dbt seed --select "raw_*"
+
+      - name: Run full dbt pipeline with validation
+        run: dbt build --fail-fast
+
+      - name: Generate documentation
+        run: dbt docs generate
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dbt-prod-artifacts
+          path: target/
+          retention-days: 30
+
+      - name: Create deployment summary
+        if: success()
+        run: |
+          echo "## ✅ Production Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Successfully deployed medallion architecture to Databricks" >> $GITHUB_STEP_SUMMARY
+          echo "- **Catalog**: streaming_prod" >> $GITHUB_STEP_SUMMARY
+          echo "- **Timestamp**: $(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch**: main" >> $GITHUB_STEP_SUMMARY
+
+      - name: Comment on PR if production deployment succeeds
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '✅ Successfully deployed to production (streaming_prod)'
+            })
+
+      - name: Notify on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '❌ Production deployment failed. Check workflow logs for details.'
+            })

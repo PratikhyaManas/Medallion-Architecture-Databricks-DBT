@@ -1,0 +1,122 @@
+selectors:
+  # Medallion Architecture Layers
+  - name: medallion_bronze
+    description: All bronze layer models
+    selector:
+      - tags: [bronze]
+
+  - name: medallion_silver
+    description: All silver layer models
+    selector:
+      - tags: [silver]
+
+  - name: medallion_gold
+    description: All gold layer models (facts and dimensions)
+    selector:
+      - tags: [gold]
+
+  # Entity-specific selectors
+  - name: users_models
+    description: All models related to users
+    selector:
+      - union:
+        - tags: [users]
+        - models: [silver_users, dim_customers, snap_customers]
+
+  - name: shows_models
+    description: All models related to shows/content
+    selector:
+      - tags: [shows]
+
+  - name: watches_models
+    description: All models related to viewing sessions
+    selector:
+      - tags: [watches]
+
+  - name: ratings_models
+    description: All models related to ratings and reviews
+    selector:
+      - tags: [ratings]
+
+  # Data quality
+  - name: tested_models
+    description: Models with test coverage
+    selector:
+      - fqn_tests:
+        - "test.*"
+
+  - name: untested_models
+    description: Models without tests
+    selector:
+      - fqn_tests:
+        - "test.*"
+      - compare: exclude
+
+  # Staging models (typically used for intermediate transformations)
+  - name: staging_models
+    description: Staging and intermediate models
+    selector:
+      - path: [models/staging]
+
+  # Fact table selector
+  - name: facts
+    description: All fact tables
+    selector:
+      - tags: [fact]
+
+  # Dimension table selector
+  - name: dimensions
+    description: All dimension tables
+    selector:
+      - tags: [dimension]
+
+  # Snapshots for slowly changing dimensions
+  - name: snapshots
+    description: All snapshot models (SCD Type-2)
+    selector:
+      - resource_type: [snapshot]
+
+  # Critical production models
+  - name: critical_models
+    description: Models flagged as critical for production
+    selector:
+      - config.meta.critical: true
+
+  # Development-safe
+  - name: safe_for_development
+    description: Models safe to modify in development
+    selector:
+      - tags: [development_safe]
+
+  # Performance-sensitive models
+  - name: large_models
+    description: Models that are large and performance-sensitive
+    selector:
+      - config.materialized: table
+      - union:
+        - fqn: "*.fct_*"
+        - fqn: "*.fact_*"
+
+  # Newly created models
+  - name: recent_models
+    description: Models created or modified recently
+    selector:
+      - union:
+        - tags: [new]
+        - tags: [recent]
+
+  # Models by frequency
+  - name: daily_refresh
+    description: Models that should be refreshed daily
+    selector:
+      - config.meta.frequency: daily
+
+  - name: weekly_refresh
+    description: Models that refresh weekly
+    selector:
+      - config.meta.frequency: weekly
+
+  - name: monthly_refresh
+    description: Models that refresh monthly
+    selector:
+      - config.meta.frequency: monthly

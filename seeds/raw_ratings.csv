@@ -1,0 +1,15 @@
+rating_id,watch_id,show_id,user_rating,review_text,created_at
+R001,W001,101,5,Outstanding drama! Must watch!,2024-01-10
+R002,W001,102,4,Funny and engaging,2024-01-10
+R003,W002,109,5,Amazing sci-fi thriller,2024-01-15
+R004,W002,110,4,Very entertaining,2024-01-15
+R005,W003,106,3,Average documentary,2024-01-20
+R006,W004,104,5,Best show ever!,2024-02-01
+R007,W004,105,4,Great mystery plot,2024-02-01
+R008,W005,108,4,Really funny!,2024-02-14
+R009,W006,103,5,Gripping thriller,2024-02-20
+R010,W007,102,4,Great comedy,2024-03-01
+R011,W007,109,5,Fantastic series,2024-03-01
+R012,W008,107,4,Sweet romance,2024-03-10
+R013,W009,101,5,Still amazing on rewatch,2024-03-15
+R014,W010,110,3,Not my cup of tea,2024-03-22

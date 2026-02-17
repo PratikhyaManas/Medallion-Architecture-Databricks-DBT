@@ -1,0 +1,13 @@
+watch_id,user_id,watch_date,watch_status,device,watching_country,completion_pct,created_at
+W001,1,2024-01-10,completed,Smart TV,USA,1.0,2024-01-10
+W002,2,2024-01-15,in_progress,iPhone,USA,0.65,2024-01-15
+W003,3,2024-01-20,paused,Laptop,Mexico,0.35,2024-01-20
+W004,4,2024-02-01,completed,Tablet,UK,1.0,2024-02-01
+W005,5,2024-02-14,completed,Smart TV,Italy,1.0,2024-02-14
+W006,6,2024-02-20,in_progress,iPhone,China,0.45,2024-02-20
+W007,7,2024-03-01,completed,Laptop,South Korea,1.0,2024-03-01
+W008,8,2024-03-10,completed,Smart TV,Germany,1.0,2024-03-10
+W009,1,2024-03-15,completed,Tablet,USA,1.0,2024-03-15
+W010,10,2024-03-22,dropped,iPhone,USA,0.25,2024-03-22
+W011,2,2024-04-05,completed,Smart TV,USA,1.0,2024-04-05
+W012,4,2024-04-18,completed,Laptop,UK,1.0,2024-04-18

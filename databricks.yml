@@ -1,0 +1,175 @@
+bundle:
+  name: dbt-streaming-medallion
+  description: "Streaming platform medallion architecture with dbt on Databricks"
+  version: 1.0.0
+
+  environments:
+    dev:
+      workspace:
+        host: "{{ env.DATABRICKS_HOST }}"
+        token: "{{ env.DATABRICKS_TOKEN }}"
+      variables:
+        databricks_catalog: "streaming_dev"
+        dbt_threads: 4
+
+    prod:
+      workspace:
+        host: "{{ env.DATABRICKS_HOST }}"
+        token: "{{ env.DATABRICKS_TOKEN }}"
+      variables:
+        databricks_catalog: "streaming_prod"
+        dbt_threads: 8
+
+  variables:
+    databricks_catalog:
+      default: "streaming_dev"
+      description: "Unity Catalog for the medallion architecture (dev/prod)"
+
+    dbt_profiles_dir:
+      default: "~/.dbt"
+      description: "dbt profiles directory"
+
+    dbt_threads:
+      default: 4
+      description: "Number of parallel threads for dbt execution"
+
+targets:
+  # Development deployment
+  dev:
+    workspace:
+      host: "{{ env.DATABRICKS_HOST }}"
+      token: "{{ env.DATABRICKS_TOKEN }}"
+
+  # Production deployment
+  prod:
+    workspace:
+      host: "{{ env.DATABRICKS_HOST }}"
+      token: "{{ env.DATABRICKS_TOKEN }}"
+
+resources:
+  jobs:
+    dbt_bronze_job:
+      name: "Bronze Layer - Streaming Platform Data Ingestion"
+      description: "Load raw streaming data from seeds into bronze layer"
+      max_concurrent_runs: 1
+      timeout_seconds: 7200
+      tasks:
+        - task_key: dbt_seed
+          notebook_task:
+            notebook_path: "{{workspace.file_path}}/notebooks/dbt_seed.py"
+            base_parameters:
+              catalog: "{{ variables.databricks_catalog }}"
+              threads: "{{ variables.dbt_threads }}"
+          cluster_id: "{{ env.DBT_CLUSTER_ID }}"
+          timeout_seconds: 3600
+          max_retries: 1
+          min_retry_interval_millis: 30000
+
+        - task_key: dbt_bronze
+          notebook_task:
+            notebook_path: "{{workspace.file_path}}/notebooks/dbt_run_bronze.py"
+            base_parameters:
+              catalog: "{{ variables.databricks_catalog }}"
+              threads: "{{ variables.dbt_threads }}"
+          cluster_id: "{{ env.DBT_CLUSTER_ID }}"
+          depends_on:
+            - task_key: dbt_seed
+          timeout_seconds: 3600
+          max_retries: 1
+
+    dbt_silver_job:
+      name: "Silver Layer - Data Cleaning & Validation"
+      description: "Transform and validate bronze data into silver layer"
+      max_concurrent_runs: 1
+      timeout_seconds: 7200
+      tasks:
+        - task_key: dbt_silver
+          notebook_task:
+            notebook_path: "{{workspace.file_path}}/notebooks/dbt_run_silver.py"
+            base_parameters:
+              catalog: "{{ variables.databricks_catalog }}"
+              threads: "{{ variables.dbt_threads }}"
+          cluster_id: "{{ env.DBT_CLUSTER_ID }}"
+          timeout_seconds: 3600
+          max_retries: 1
+
+        - task_key: dbt_test_silver
+          notebook_task:
+            notebook_path: "{{workspace.file_path}}/notebooks/dbt_test.py"
+            base_parameters:
+              catalog: "{{ variables.databricks_catalog }}"
+              select: "silver"
+          cluster_id: "{{ env.DBT_CLUSTER_ID }}"
+          depends_on:
+            - task_key: dbt_silver
+          timeout_seconds: 1800
+
+    dbt_gold_job:
+      name: "Gold Layer - Business Ready Analytics"
+      description: "Create fact and dimension tables for analytics"
+      max_concurrent_runs: 1
+      timeout_seconds: 7200
+      tasks:
+        - task_key: dbt_snapshot
+          notebook_task:
+            notebook_path: "{{workspace.file_path}}/notebooks/dbt_snapshot.py"
+            base_parameters:
+              catalog: "{{ variables.databricks_catalog }}"
+              threads: "{{ variables.dbt_threads }}"
+          cluster_id: "{{ env.DBT_CLUSTER_ID }}"
+          timeout_seconds: 1800
+          max_retries: 1
+
+        - task_key: dbt_gold
+          notebook_task:
+            notebook_path: "{{workspace.file_path}}/notebooks/dbt_run_gold.py"
+            base_parameters:
+              catalog: "{{ variables.databricks_catalog }}"
+              threads: "{{ variables.dbt_threads }}"
+          cluster_id: "{{ env.DBT_CLUSTER_ID }}"
+          depends_on:
+            - task_key: dbt_snapshot
+          timeout_seconds: 3600
+          max_retries: 1
+
+        - task_key: dbt_test_gold
+          notebook_task:
+            notebook_path: "{{workspace.file_path}}/notebooks/dbt_test.py"
+            base_parameters:
+              catalog: "{{ variables.databricks_catalog }}"
+              select: "gold"
+          cluster_id: "{{ env.DBT_CLUSTER_ID }}"
+          depends_on:
+            - task_key: dbt_gold
+          timeout_seconds: 1800
+
+    dbt_full_pipeline:
+      name: "Full Pipeline - Bronze → Silver → Gold"
+      description: "Complete medallion architecture pipeline execution"
+      max_concurrent_runs: 1
+      timeout_seconds: 14400
+      task_notification:
+        on_failure:
+          - email_addresses:
+              - "{{ env.ALERT_EMAIL }}"
+
+  pipelines:
+    dbt_medallion_pipeline:
+      name: "Medallion Architecture - Streaming Platform"
+      description: "Delta Live Tables pipeline for streaming platform data"
+      target: "{{ variables.databricks_catalog }}"
+      clusters:
+        - node_id_template: "dbt_dlp_cluster"
+          policy_id: "{{ env.DBT_CLUSTER_POLICY_ID }}"
+          num_workers: 2
+      libraries:
+        - package: dbt-databricks==1.7.0
+      notifications:
+        on_failure:
+          - email_addresses:
+              - "{{ env.ALERT_EMAIL }}"
+        on_update:
+          - email_addresses:
+              - "{{ env.ALERT_EMAIL }}"
+      continuous: false
+

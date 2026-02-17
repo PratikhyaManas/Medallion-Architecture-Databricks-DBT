@@ -1,0 +1,26 @@
+# Copy this file to ~/.dbt/profiles.yml on your local machine
+# OR export env-var DATABRICKS_TOKEN before running dbt commands
+
+databricks_medallion:
+  target: dev
+  outputs:
+
+    dev:
+      type:       databricks
+      method:     http
+      catalog:    streaming_dev                       # Unity Catalog name
+      schema:     default
+      host:       adb-XXXX.azuredatabricks.net        # <-- replace
+      http_path:  /sql/1.0/warehouses/XXXX            # <-- replace
+      token:      "{{ env_var('DATABRICKS_TOKEN') }}"
+      threads:    4
+
+    prod:
+      type:       databricks
+      method:     http
+      catalog:    streaming_prod                      # Unity Catalog name
+      schema:     default
+      host:       adb-YYYY.azuredatabricks.net        # <-- replace
+      http_path:  /sql/1.0/warehouses/YYYY            # <-- replace
+      token:      "{{ env_var('DATABRICKS_TOKEN') }}"
+      threads:    8

@@ -1,0 +1,204 @@
+version: 2
+
+# ── SOURCES ──────────────────────────────────────────────────────────────────
+sources:
+  - name: raw_source
+    description: "Seed CSVs acting as raw ingestion source for streaming platform"
+    schema: seeds
+    tables:
+      - name: raw_users
+        description: "Raw user/subscriber master data"
+      - name: raw_shows
+        description: "Raw streaming show catalogue"
+      - name: raw_watches
+        description: "Raw viewing session headers"
+      - name: raw_ratings
+        description: "Raw user ratings and reviews"
+
+# ── MODELS ───────────────────────────────────────────────────────────────────
+models:
+
+  # ── BRONZE ─────────────────────────────────────────────────────────────────
+  - name: bronze_users
+    description: "Raw users loaded from seed — metadata columns appended"
+    columns:
+      - name: user_id
+        description: "Unique user identifier"
+        tests: [not_null, unique]
+      - name: email
+        description: "User email address"
+        tests: [not_null]
+      - name: _row_hash
+        description: "MD5 hash for deduplication"
+        tests: [not_null]
+
+  - name: bronze_shows
+    description: "Raw shows loaded from seed"
+    columns:
+      - name: show_id
+        tests: [not_null, unique]
+
+  - name: bronze_watches
+    description: "Raw viewing sessions loaded from seed"
+    columns:
+      - name: watch_id
+        tests: [not_null, unique]
+
+  - name: bronze_ratings
+    description: "Raw user ratings and reviews loaded from seed"
+    columns:
+      - name: rating_id
+        tests: [not_null, unique]
+
+  # ── SILVER ─────────────────────────────────────────────────────────────────
+  - name: silver_users
+    description: "Cleaned, validated users — no nulls, normalised casing"
+    columns:
+      - name: user_id
+        tests: [not_null, unique]
+      - name: email
+        tests: [not_null, unique]
+      - name: country
+        tests: [not_null]
+
+  - name: silver_shows
+    description: "Cleaned shows with enforced positive ratings"
+    columns:
+      - name: show_id
+        tests: [not_null, unique]
+      - name: rating_avg
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 5
+              inclusive: true
+
+  - name: silver_watches
+    description: "Cleaned viewing sessions — status normalised to lowercase"
+    columns:
+      - name: watch_id
+        tests: [not_null, unique]
+      - name: user_id
+        tests:
+          - not_null
+          - relationships:
+              to:    ref('silver_users')
+              field: user_id
+      - name: watch_status
+        tests:
+          - accepted_values:
+              values: ['completed','paused','dropped','in_progress']
+      - name: completion_pct
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 1
+              inclusive: true
+
+  - name: silver_ratings
+    description: "Cleaned user ratings with sentiment classification"
+    columns:
+      - name: rating_id
+        tests: [not_null, unique]
+      - name: watch_id
+        tests:
+          - not_null
+          - relationships:
+              to:    ref('silver_watches')
+              field: watch_id
+      - name: show_id
+        tests:
+          - not_null
+          - relationships:
+              to:    ref('silver_shows')
+              field: show_id
+      - name: user_rating
+        tests:
+          - not_null
+          - dbt_utils.accepted_range: {min_value: 1, max_value: 5, inclusive: true}
+      - name: rating_sentiment
+        tests: [not_null]
+
+  # ── GOLD ───────────────────────────────────────────────────────────────────
+  - name: dim_shows
+    description: "Show dimension enriched with quality_tier and series_length"
+    columns:
+      - name: show_id
+        tests: [not_null, unique]
+      - name: quality_tier
+        tests:
+          - accepted_values:
+              values: ['Good','Great','Excellent','Masterpiece']
+      - name: series_length
+        tests:
+          - accepted_values:
+              values: ['Limited','Standard','Long-Running']
+
+  - name: fct_watches
+    description: "Fact table for viewing sessions enriched with rating metrics and time dimensions"
+    columns:
+      - name: watch_id
+        description: "Unique viewing session identifier"
+        tests: [not_null, unique]
+      - name: user_id
+        description: "Foreign key to user dimension"
+        tests: [not_null]
+      - name: watch_date
+        description: "Date when viewing session occurred"
+        tests: [not_null]
+      - name: watch_status
+        description: "Status of the viewing session (completed, paused, dropped, in_progress)"
+        tests: [not_null]
+      - name: device
+        description: "Device used for viewing"
+        tests: [not_null]
+      - name: watching_country
+        description: "Country where viewing occurred"
+        tests: [not_null]
+      - name: completion_pct
+        description: "Percentage of content watched (0-1)"
+        tests: [not_null]
+      - name: rating_count
+        description: "Number of ratings received for this watch session"
+      - name: avg_rating
+        description: "Average rating score (0-5) from all ratings"
+      - name: max_rating
+        description: "Maximum rating score received (0-5)"
+      - name: watch_year
+        description: "Calendar year of watch date"
+      - name: watch_month
+        description: "Calendar month of watch date"
+      - name: watch_month_label
+        description: "Month label in YYYY-MM format"
+      - name: watch_day_of_week
+        description: "Day of week (1=Monday, 7=Sunday)"
+
+  - name: fct_ratings
+    description: "Fact table for user ratings enriched with show, watch, and user context"
+    columns:
+      - name: rating_id
+        description: "Unique rating identifier"
+        tests: [not_null, unique]
+      - name: watch_id
+        description: "Foreign key to watch fact table"
+        tests: [not_null]
+      - name: show_id
+        description: "Foreign key to show dimension"
+        tests: [not_null]
+      - name: user_id
+        description: "Foreign key to user dimension"
+        tests: [not_null]
+      - name: user_rating
+        description: "User rating score (1-5 stars)"
+        tests: [not_null]
+      - name: rating_sentiment
+        description: "Derived sentiment classification (Positive, Neutral, Negative)"
+        tests: [not_null]
+      - name: rating_review
+        description: "User's text review/comment"
+      - name: rating_date
+        description: "Date when rating was submitted"
+        tests: [not_null]
+      - name: user_rating
+        tests: [not_null]

@@ -1,0 +1,25 @@
+# dbt dependencies
+dbt-databricks==1.7.0
+dbt-core==1.7.0
+dbt-utils==1.1.1
+dbt-expectations==0.8.0
+
+# Databricks utilities
+databricks-cli==0.18.0
+databricks-sql-connector==3.0.0
+
+# Development tools
+pytest==7.4.3
+black==23.10.1
+flake8==6.1.0
+mypy==1.6.1
+pre-commit==3.5.0
+
+# Code linting & formatting
+isort==5.12.0
+pylint==3.0.0
+
+# Python utilities
+python-dotenv==1.0.0
+requests==2.31.0
+pydantic==2.5.0

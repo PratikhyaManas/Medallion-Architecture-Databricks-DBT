@@ -1,0 +1,11 @@
+show_id,show_name,genre,release_date,rating_avg,total_episodes,production_company,created_at
+101,Breaking The Code,Drama,2022-01-15,4.5,10,StreamStudios Inc,2022-06-01
+102,Code Quest,Comedy,2022-02-20,4.1,8,VisionWorks,2022-06-01
+103,Tech Noir,Thriller,2022-03-10,4.7,12,CineForce,2022-07-15
+104,Silicon Dreams,Sci-Fi,2022-04-01,4.8,15,FutureScreen,2022-08-01
+105,Data Detective,Mystery,2022-05-05,4.6,10,MysteryLabs,2022-08-01
+106,Algorithm,Documentary,2022-06-12,4.3,6,DocFirst,2022-09-10
+107,Binary Hearts,Romance,2022-07-18,4.2,8,LoveStories Ltd,2022-09-10
+108,Cyber Cafe,Comedy,2022-08-25,4.0,12,LaughFactory,2022-10-01
+109,AI Awakens,Sci-Fi,2022-09-30,4.9,14,FutureScreen,2022-11-20
+110,Server Errors,Comedy,2022-10-15,4.4,10,LaughFactory,2022-12-01

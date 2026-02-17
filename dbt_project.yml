@@ -1,0 +1,68 @@
+name: dbt_streaming_db
+version: '1.0.0'
+config-version: 2
+
+profile: databricks_medallion
+
+model-paths:    ["models"]
+seed-paths:     ["seeds"]
+macro-paths:    ["macros"]
+snapshot-paths: ["snapshots"]
+analysis-paths: ["analyses"]
+test-paths:     ["tests"]
+clean-targets:  ["target", "dbt_packages"]
+
+# Performance & Behavior Options
+queries:
+  compile:
+    timeout_seconds: 300
+  execute:
+    timeout_seconds: 3600
+
+# Variable defaults
+vars:
+  start_date: '2024-01-01'
+  dbt_max_batch_size: 10000
+  snapshot_lookback_days: 30
+
+# Persist column descriptions to Unity Catalog
+models:
+  dbt_streaming_db:
+    +persist_docs:
+      relation: true
+      columns:  true
+    +schema_identifier: '{{ this.schema if config.get("schema", target.schema) == target.schema else config.get("schema") }}'
+    010_bronze:
+      +materialized: table
+      +schema: bronze
+      +tags: ["bronze", "raw"]
+      +meta:
+        layer: bronze
+        frequency: daily
+    020_silver:
+      +materialized: table
+      +schema: silver
+      +tags: ["silver", "cleaned"]
+      +meta:
+        layer: silver
+        frequency: daily
+    030_gold:
+      +materialized: table
+      +schema: gold
+      +tags: ["gold", "analytics"]
+      +meta:
+        layer: gold
+        frequency: daily
+
+seeds:
+  dbt_streaming_db:
+    +schema: seeds
+    +tags: ["seed"]
+    +quote_columns: false
+
+# Test configurations
+tests:
+  dbt_expectations:
+    # Warnings instead of hard fails for data quality tests
+    +store_failures: true
+    +warn_if: "return_count > 1000"
