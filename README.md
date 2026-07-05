@@ -28,7 +28,11 @@ dbt_streaming_db/
 ├── profiles.yml                 # Databricks connection (copy to ~/.dbt/)
 ├── packages.yml                 # dbt_utils + dbt_expectations
 ├── schema.yml                   # Sources, model docs & tests
+├── selectors.yml                # Reusable model/snapshot selectors
 ├── databricks.yml               # Asset bundle configuration
+├── azure-pipelines.yml          # Azure DevOps CI/CD pipeline
+├── AZURE_PIPELINES_SETUP.md     # Azure DevOps setup guide
+├── Makefile                     # Common local commands
 │
 ├── seeds/                       # Raw CSV seed data
 │   ├── raw_users.csv
@@ -86,7 +90,8 @@ dbt_streaming_db/
 ├── setup.sh / setup.bat         # Automated local setup scripts
 ├── requirements.txt             # Python dependencies
 ├── .env.example                 # Environment template
-├── .gitignore                   # Git configuration
+├── .pre-commit-config.yaml      # Pre-commit quality checks
+├── .editorconfig                # Editor formatting standards
 └── README.md                    # This file
 ```
 

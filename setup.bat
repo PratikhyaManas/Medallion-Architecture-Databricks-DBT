@@ -93,6 +93,6 @@ echo 4. Run: dbt seed --profiles-dir %%USERPROFILE%%\.dbt
 echo 5. Run: dbt run --profiles-dir %%USERPROFILE%%\.dbt
 echo.
 echo For deployment:
-echo - Setup GitHub secrets (see DEPLOYMENT.md)
+echo - Setup GitHub secrets (see README.md)
 echo - Deploy with: databricks bundle deploy --target dev
 echo.
