@@ -8,12 +8,24 @@ sources:
     tables:
       - name: raw_users
         description: "Raw user/subscriber master data"
+        loaded_at_field: subscription_date
+        freshness:
+          warn_after: {count: 3650, period: day}
+          error_after: {count: 7300, period: day}
       - name: raw_shows
         description: "Raw streaming show catalogue"
       - name: raw_watches
         description: "Raw viewing session headers"
+        loaded_at_field: watch_date
+        freshness:
+          warn_after: {count: 3650, period: day}
+          error_after: {count: 7300, period: day}
       - name: raw_ratings
         description: "Raw user ratings and reviews"
+        loaded_at_field: created_at
+        freshness:
+          warn_after: {count: 3650, period: day}
+          error_after: {count: 7300, period: day}
 
 # ── MODELS ───────────────────────────────────────────────────────────────────
 models:
@@ -57,6 +69,12 @@ models:
       - name: user_id
         tests: [not_null, unique]
       - name: email
+        tests: [not_null, unique]
+      - name: email_token
+        description: "Deterministic SHA-256 token for email for privacy-safe joins"
+        tests: [not_null, unique]
+      - name: user_token
+        description: "Deterministic SHA-256 token for user identifier"
         tests: [not_null, unique]
       - name: country
         tests: [not_null]
@@ -173,6 +191,9 @@ models:
         description: "Month label in YYYY-MM format"
       - name: watch_day_of_week
         description: "Day of week (1=Monday, 7=Sunday)"
+      - name: last_modified_at
+        description: "Latest upstream load timestamp used for incremental merge"
+        tests: [not_null]
 
   - name: fct_ratings
     description: "Fact table for user ratings enriched with show, watch, and user context"
@@ -200,5 +221,6 @@ models:
       - name: rating_date
         description: "Date when rating was submitted"
         tests: [not_null]
-      - name: user_rating
+      - name: last_modified_at
+        description: "Latest upstream load timestamp used for incremental merge"
         tests: [not_null]

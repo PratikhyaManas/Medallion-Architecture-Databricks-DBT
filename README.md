@@ -284,6 +284,32 @@ dbt compile --profiles-dir ~/.dbt
 dbt ls --profiles-dir ~/.dbt
 ```
 
+### Source Freshness
+
+```bash
+dbt source freshness --profiles-dir ~/.dbt
+```
+
+### Incremental Gold Facts
+
+- `fct_watches` and `fct_ratings` use incremental merge strategy for faster runs.
+- Use full refresh when logic changes:
+
+```bash
+dbt run --select "fct_watches fct_ratings" --full-refresh --profiles-dir ~/.dbt
+```
+
+### PII Controls (Non-Prod Masking)
+
+- In non-prod targets (`dev`, `ci`, `qa`, `test`), user PII is masked/tokenized in `silver_users`.
+- Configure token salt with dbt vars in CI/local:
+
+```yaml
+vars:
+   mask_pii_in_non_prod: true
+   pii_token_salt: "<set-a-secure-salt>"
+```
+
 ---
 
 ## Databricks Asset Bundle Deployment

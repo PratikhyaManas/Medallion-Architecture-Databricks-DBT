@@ -12,18 +12,13 @@ analysis-paths: ["analyses"]
 test-paths:     ["tests"]
 clean-targets:  ["target", "dbt_packages"]
 
-# Performance & Behavior Options
-queries:
-  compile:
-    timeout_seconds: 300
-  execute:
-    timeout_seconds: 3600
-
 # Variable defaults
 vars:
   start_date: '2024-01-01'
   dbt_max_batch_size: 10000
   snapshot_lookback_days: 30
+  mask_pii_in_non_prod: true
+  pii_token_salt: "{{ env_var('DBT_PII_TOKEN_SALT') }}"
 
 # Persist column descriptions to Unity Catalog
 models:
@@ -31,7 +26,6 @@ models:
     +persist_docs:
       relation: true
       columns:  true
-    +schema_identifier: '{{ this.schema if config.get("schema", target.schema) == target.schema else config.get("schema") }}'
     010_bronze:
       +materialized: table
       +schema: bronze

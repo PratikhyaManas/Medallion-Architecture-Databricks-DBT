@@ -26,6 +26,7 @@ env:
   DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
   DBT_CLUSTER_ID: ${{ secrets.DBT_CLUSTER_ID }}
   ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
+  DBT_PII_TOKEN_SALT: ${{ secrets.DBT_PII_TOKEN_SALT }}
 
 jobs:
   dbt-lint:
@@ -99,6 +100,9 @@ jobs:
       - name: Load seed data
         run: dbt seed
 
+      - name: Check source freshness
+        run: dbt source freshness
+
       - name: Run dbt models
         run: dbt run
 
@@ -117,6 +121,107 @@ jobs:
             target/
             dbt_packages/
           retention-days: 5
+
+  dbt-benchmark:
+    name: Lightweight Runtime Benchmark
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies from requirements
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Setup dbt profiles
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+          DATABRICKS_HTTP_PATH: ${{ secrets.DATABRICKS_HTTP_PATH }}
+        run: |
+          mkdir -p ~/.dbt
+          cat > ~/.dbt/profiles.yml << 'EOF'
+          databricks_medallion:
+            target: dev
+            outputs:
+              dev:
+                type: databricks
+                method: http
+                catalog: streaming_dev
+                schema: default
+                host: ${{ secrets.DATABRICKS_HOST }}
+                http_path: ${{ secrets.DATABRICKS_HTTP_PATH }}
+                token: ${{ secrets.DATABRICKS_TOKEN }}
+                threads: 4
+          EOF
+
+      - name: Install dbt packages
+        run: dbt deps
+
+      - name: Load seed data
+        run: dbt seed --select "raw_*"
+
+      - name: Benchmark gold facts runtime
+        run: |
+          START_TS=$(date +%s)
+          dbt run --select "fct_watches fct_ratings" --fail-fast
+          END_TS=$(date +%s)
+          TOTAL_SEC=$((END_TS - START_TS))
+          echo "total_runtime_seconds=${TOTAL_SEC}" >> $GITHUB_ENV
+
+      - name: Build runtime summary
+        run: |
+          python - << 'PY'
+          import json
+          from pathlib import Path
+
+          run_results = Path('target/run_results.json')
+          if not run_results.exists():
+              Path('benchmark_summary.md').write_text('No run_results.json found.\n', encoding='utf-8')
+              raise SystemExit(0)
+
+          data = json.loads(run_results.read_text(encoding='utf-8'))
+          lines = [
+              '## Runtime Benchmark (PR)',
+              '',
+              '| Model | Status | Execution Time (s) |',
+              '| --- | --- | ---: |'
+          ]
+
+          total = 0.0
+          for row in data.get('results', []):
+              uid = row.get('unique_id', '')
+              if not uid.startswith('model.'):
+                  continue
+              model = uid.split('.')[-1]
+              status = row.get('status', 'unknown')
+              elapsed = float(row.get('execution_time', 0.0) or 0.0)
+              total += elapsed
+              lines.append(f'| {model} | {status} | {elapsed:.2f} |')
+
+          lines.extend(['', f'Total model execution time: {total:.2f}s'])
+          Path('benchmark_summary.md').write_text('\n'.join(lines) + '\n', encoding='utf-8')
+          PY
+
+      - name: Publish benchmark summary
+        run: cat benchmark_summary.md >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload benchmark artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dbt-benchmark-artifacts
+          path: |
+            benchmark_summary.md
+            target/run_results.json
+          retention-days: 7
 
   deploy-dev:
     name: Deploy to Dev Environment

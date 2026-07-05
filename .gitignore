@@ -1,0 +1,6 @@
+# Local Python virtual environments
+.venv310/
+
+# dbt generated artifacts
+logs/
+dbt_packages/

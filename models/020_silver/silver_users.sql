@@ -13,10 +13,24 @@ with source as (
 cleaned as (
     select
         cast(user_id as int)                  as user_id,
-        initcap(trim(name))                   as name,
-        nullif(trim(phone), '')               as phone,
-        lower(trim(email))                    as email,
-        trim(address)                         as address,
+        case
+          when {{ should_mask_pii() }} then concat('User_', cast(user_id as string))
+          else initcap(trim(name))
+        end                                   as name,
+        case
+          when {{ should_mask_pii() }} then null
+          else nullif(trim(phone), '')
+        end                                   as phone,
+        case
+          when {{ should_mask_pii() }} then {{ mask_email('lower(trim(email))') }}
+          else lower(trim(email))
+        end                                   as email,
+        {{ tokenize_value('lower(trim(email))') }} as email_token,
+        {{ tokenize_value('cast(user_id as string)') }} as user_token,
+        case
+          when {{ should_mask_pii() }} then null
+          else trim(address)
+        end                                   as address,
         trim(region)                          as region,
         trim(postal_zip)                      as postal_zip,
         upper(trim(country))                  as country,
